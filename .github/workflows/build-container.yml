@@ -1,0 +1,42 @@
+# https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions#upgrading-a-workflow-that-accesses-a-registry-using-a-personal-access-token
+name: Build Container
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  IMAGE_NAME: js-plugin-builder
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+  steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+    
+    - name: Build image
+      run: podman build -f Containerfile -t $IMAGE_NAME .
+
+    - name: Push image
+      run: |
+        IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+        IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+        VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
+        [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+
+        [ "$VERSION" == "master" ] && VERSION=latest
+
+        echo IMAGE_ID=$IMAGE_ID
+        echo VERSION=$VERSION
+
+        podman tag $IMAGE_NAME $IMAGE_ID:$VERSION
+        podman push $IMAGE_ID:$VERSION
+
